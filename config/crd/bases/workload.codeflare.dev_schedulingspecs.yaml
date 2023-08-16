@@ -33,6 +33,112 @@ spec:
             type: object
           spec:
             properties:
+              minAvailable:
+                description: Expected number of pods in running and/or completed state. Requeuing is triggered
+                  when the number of running/completed pods is not equal to this value. When not specified,
+                  requeuing is disabled and no check is performed.
+                type: integer
+              requeuing:
+                description: Specification of the requeuing strategy based on waiting time. Values in this field
+                  control how often the pod check should happen and if requeuing has reached its maximum number of
+                  times.
+                properties:
+                  initialTimeInSeconds:
+                    description: Value to keep track of the initial wait time. Users cannot set this as it is
+                      taken from 'timeInSeconds'.
+                    type: integer
+                  timeInSeconds:
+                    description: Initial waiting time before requeuing conditions are checked. This value is
+                      specified by the user, but it may grow as requeuing events happen.
+                    type: integer
+                    default: 300
+                  maxTimeInSeconds:
+                    description: Maximum waiting time for requeuing checks
+                    type: integer
+                    default: 0
+                  growthType:
+                    description: Growth strategy to increase the waiting time between requeuing checks. The values
+                      available are 'exponential', 'linear', or 'none'. For example, 'exponential' growth would
+                      double the 'timeInSeconds' value every time a requeuing event is triggered. If the string value
+                      is misspelled or not one of the possible options, the growth behavior is defaulted to 'none'.
+                    type: string
+                    default: "exponential"
+                  numRequeuings:
+                    description: Field to keep track of how many times a requeuing event has been triggered
+                    type: integer
+                    default: 0
+                  maxNumRequeuings:
+                    description: Maximum number of requeuing events allowed. Once this value is reached (e.g.,
+                      'numRequeuings = maxNumRequeuings', no more requeuing checks are performed and the generic
+                      items are stopped and removed from the cluster (AppWrapper remains deployed).
+                    type: integer
+                    default: 0
+                type: object
+              clusterScheduling:
+                description: Stanza to define cluster allocation restrictions.
+                  Used only in multiCluster mode.
+                properties:
+                  clusters:
+                    description: Specifies cluster IDs for allocation
+                      restrictions.  Used only in
+                      multiCluster mode.
+                    items:
+                      properties:
+                        name:
+                          description: Cluster ID name.  Used only in
+                            multiCluster mode.
+                          type: string
+                      type: object
+                    type: array
+                  clusterSelector:
+                    description: (UNSUPPORTED FIELD) A label selector is a label
+                      query over a set of cluster objects.  The result of
+                      matchLabels and matchExpressions are ANDed. An empty
+                      label selector matches all objects. A null label selector
+                      matches no objects.
+                    properties:
+                      matchExpressions:
+                        description: matchExpressions is a list of label selector requirements.
+                          The requirements are ANDed.
+                        items:
+                          description: A label selector requirement is a selector that
+                            contains values, a key, and an operator that relates the key
+                            and values.
+                          properties:
+                            key:
+                              description: key is the label key that the selector applies
+                                to.
+                              type: string
+                            operator:
+                              description: operator represents a key's relationship to
+                                a set of values. Valid operators are In, NotIn, Exists
+                                and DoesNotExist.
+                              type: string
+                            values:
+                              description: values is an array of string values. If the
+                                operator is In or NotIn, the values array must be non-empty.
+                                If the operator is Exists or DoesNotExist, the values
+                                array must be empty. This array is replaced during a strategic
+                                merge patch.
+                              items:
+                                type: string
+                              type: array
+                          required:
+                          - key
+                          - operator
+                          type: object
+                        type: array
+                      matchLabels:
+                        additionalProperties:
+                          type: string
+                        description: matchLabels is a map of {key,value} pairs. A single
+                          {key,value} in the matchLabels map is equivalent to an element
+                          of matchExpressions, whose key field is "key", the operator
+                          is "In", and the values array contains only "value". The requirements
+                          are ANDed.
+                        type: object
+                    type: object
+                type: object
               dispatchDuration:
                 description: Wall clock duration time of appwrapper in seconds.
                 properties:
