@@ -754,6 +754,8 @@ spec:
                 description: Field to keep track of how many times a requeuing event
                   has been triggered
                 type: integer
+              targetClusterName:
+                type: string
               pending:
                 description: The number of pending pods.
                 format: int32
