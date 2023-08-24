@@ -2127,34 +2127,23 @@ func (cc *XController) manageQueueJob(ctx context.Context, qj *arbv1.AppWrapper,
 		if qj.Status.CanRun && !qj.Status.IsDispatched {
 			if klog.V(10).Enabled() {
 				current_time := time.Now()
-				klog.V(10).Infof("[manageQueueJob] [Dispatcher]  XQJ '%s/%s' has Overhead Before Dispatching: %s", qj.Namespace, qj.Name, current_time.Sub(qj.CreationTimestamp.Time))
-				klog.V(10).Infof("[manageQueueJob] [Dispatcher]  '%s/%s', %s: WorkerBeforeDispatch", qj.Namespace, qj.Name, time.Now().Sub(qj.CreationTimestamp.Time))
-			}
 
+				klog.V(10).Infof("[worker-manageQJ] XQJ %s has Overhead Before Dispatching: %s", qj.Name, current_time.Sub(qj.CreationTimestamp.Time))
+				klog.V(10).Infof("[TTime] %s, %s: WorkerBeforeDispatch", qj.Name, time.Now().Sub(qj.CreationTimestamp.Time))
+			}			
 			queuejobKey, _ := GetQueueJobKey(qj)
 			if agentId, ok := cc.dispatchMap[queuejobKey]; ok {
-
-
 				klog.V(10).Infof("[Dispatcher Controller] Dispatched AppWrapper %s to Agent ID: %s.", qj.Name, agentId)
 				if cc.serverOption.ExternalDispatch {
-				   clusterList := qj.Spec.SchedSpec.ClusterScheduling.Clusters
-                   if len(clusterList) == 0 {
-					  klog.Errorf("[Dispatcher Controller] AppWrapper %s does not include a list of clusterIds in Spec.SchedSpec.ClusterScheduling.Clusters.", qj.Name)
-				      return nil
-				   } else {
-					  // choose target clusterId at random
-					  clusterId := clusterList[rand.Int()%len(clusterList)]
-					  klog.V(1).Infof("ClusterId %s is chosen randomly\n", clusterId)
-					  qj.Status.TargetClusterName = clusterId.Name
-				   }
+					qj.Status.TargetClusterName = agentId
 				} else {
-				   cc.agentMap[agentId].CreateJob(qj)
+					cc.agentMap[agentId].CreateJob(qj)
 				}
-
 				qj.Status.IsDispatched = true
 			} else {
-				klog.Errorf("[manageQueueJob] [Dispatcher]  AppWrapper %s/%s not found in dispatcher mapping.", qj.Namespace, qj.Name)
-			}
+				klog.Errorf("[Dispatcher Controller] AppWrapper %s not found in dispatcher mapping.", qj.Name)
+			}			
+
 			if klog.V(10).Enabled() {
 				current_time := time.Now()
 				klog.V(10).Infof("[manageQueueJob] [Dispatcher]  XQJ %s/%s has Overhead After Dispatching: %s", qj.Namespace, qj.Name, current_time.Sub(qj.CreationTimestamp.Time))
@@ -2195,9 +2184,14 @@ func (cc *XController) Cleanup(ctx context.Context, appwrapper *arbv1.AppWrapper
 		}
 	} else {
 		if appwrapper.Status.IsDispatched {
+
+
 			queuejobKey, _ := GetQueueJobKey(appwrapper)
 			if obj, ok := cc.dispatchMap[queuejobKey]; ok {
-				cc.agentMap[obj].DeleteJob(ctx, appwrapper)
+				if !cc.serverOption.ExternalDispatch {
+					cc.agentMap[obj].DeleteJob(appwrapper)
+				}
+				delete(cc.dispatchMap,queuejobKey)
 			}
 			appwrapper.Status.IsDispatched = false
 		}
