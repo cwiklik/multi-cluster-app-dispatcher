@@ -2092,25 +2092,21 @@ func (cc *XController) manageQueueJob(ctx context.Context, qj *arbv1.AppWrapper,
 		if qj.Status.CanRun && !qj.Status.IsDispatched {
 			if klog.V(10).Enabled() {
 				current_time := time.Now()
-				klog.V(10).Infof("[manageQueueJob] [Dispatcher]  XQJ '%s/%s' has Overhead Before Dispatching: %s", qj.Namespace, qj.Name, current_time.Sub(qj.CreationTimestamp.Time))
-				klog.V(10).Infof("[manageQueueJob] [Dispatcher]  '%s/%s', %s: WorkerBeforeDispatch", qj.Namespace, qj.Name, time.Now().Sub(qj.CreationTimestamp.Time))
-			}
-            
-			if cc.serverOption.ExternalDispatch {
-				qj.Status.TargetClusterName = cc.chooseAgent(qj)
+				klog.V(10).Infof("[worker-manageQJ] XQJ %s has Overhead Before Dispatching: %s", qj.Name, current_time.Sub(qj.CreationTimestamp.Time))
+				klog.V(10).Infof("[TTime] %s, %s: WorkerBeforeDispatch", qj.Name, time.Now().Sub(qj.CreationTimestamp.Time))
+			}			
+			queuejobKey, _ := GetQueueJobKey(qj)
+			if agentId, ok := cc.dispatchMap[queuejobKey]; ok {
+				klog.V(10).Infof("[Dispatcher Controller] Dispatched AppWrapper %s to Agent ID: %s.", qj.Name, agentId)
+				if cc.serverOption.ExternalDispatch {
+					qj.Status.TargetClusterName = agentId
+				} else {
+					cc.agentMap[agentId].CreateJob(qj)
+				}
 				qj.Status.IsDispatched = true
 			} else {
-				queuejobKey, _ := GetQueueJobKey(qj)
-				if agentId, ok := cc.dispatchMap[queuejobKey]; ok {
-					klog.V(10).Infof("[Dispatcher Controller] Dispatched AppWrapper %s to Agent ID: %s.", qj.Name, agentId)
-					cc.agentMap[agentId].CreateJob(qj)
-					qj.Status.IsDispatched = true
-				} else {
-					klog.Errorf("[Dispatcher Controller] AppWrapper %s not found in dispatcher mapping.", qj.Name)
-				}
-
-			}
-
+				klog.Errorf("[Dispatcher Controller] AppWrapper %s not found in dispatcher mapping.", qj.Name)
+			}			
 			if klog.V(10).Enabled() {
 				current_time := time.Now()
 				klog.V(10).Infof("[manageQueueJob] [Dispatcher]  XQJ %s has Overhead After Dispatching: %s", qj.Name, current_time.Sub(qj.CreationTimestamp.Time))
@@ -2151,17 +2147,13 @@ func (cc *XController) Cleanup(ctx context.Context, appwrapper *arbv1.AppWrapper
 		}
 	} else {
 		if appwrapper.Status.IsDispatched {
-			if cc.serverOption.ExternalDispatch {
-				if err := cc.arbclients.ArbV1().AppWrappers(appwrapper.Namespace).Delete(appwrapper.Name, &metav1.DeleteOptions{}); err != nil {
-					klog.Errorf("Failed to delete AppWrapper %v/%v: %v",
-					appwrapper.Namespace, appwrapper.Name, err)
-					return err
-				}
-			} else {
-				queuejobKey, _ := GetQueueJobKey(appwrapper)
-				if obj, ok := cc.dispatchMap[queuejobKey]; ok {
+
+			queuejobKey, _ := GetQueueJobKey(appwrapper)
+			if obj, ok := cc.dispatchMap[queuejobKey]; ok {
+				if !cc.serverOption.ExternalDispatch {
 					cc.agentMap[obj].DeleteJob(appwrapper)
 				}
+				delete(cc.dispatchMap,queuejobKey)
 			}
 			appwrapper.Status.IsDispatched = false
 		}
