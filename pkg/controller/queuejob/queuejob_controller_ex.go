@@ -511,7 +511,7 @@ func (qjm *XController) GetAggregatedResourcesPerGenericItem(cqj *arbv1.AppWrapp
 
 	// Get all pods and related resources
 	for _, genericItem := range cqj.Spec.AggrResources.GenericItems {
-		itemsList, _ := genericresource.GetListOfPodResourcesFromOneGenericItem(&genericItem)
+		itemsList, _ := generxicresource.GetListOfPodResourcesFromOneGenericItem(&genericItem)
 		for i := 0; i < len(itemsList); i++ {
 			retVal = append(retVal, itemsList[i])
 		}
@@ -1809,6 +1809,7 @@ func (cc *XController) syncQueueJob(ctx context.Context, qj *arbv1.AppWrapper) e
 // manageQueueJob is the core method responsible for managing the number of running
 // pods according to what is specified in the job.Spec.
 // Does NOT modify <activePods>.
+
 func (cc *XController) manageQueueJob(ctx context.Context, qj *arbv1.AppWrapper, podPhaseChanges bool) error {
 
 	if !cc.isDispatcher { // Agent Mode
@@ -2078,8 +2079,22 @@ func (cc *XController) manageQueueJob(ctx context.Context, qj *arbv1.AppWrapper,
 
 			queuejobKey, _ := GetQueueJobKey(qj)
 			if agentId, ok := cc.dispatchMap[queuejobKey]; ok {
-				klog.V(10).Infof("[manageQueueJob] [Dispatcher]  Dispatched AppWrapper %s to Agent ID: %s.", qj.Name, agentId)
-				cc.agentMap[agentId].CreateJob(ctx, qj)
+
+				klog.V(10).Infof("[Dispatcher Controller] Dispatched AppWrapper %s to Agent ID: %s.", qj.Name, agentId)
+				if cc.serverOption.ExternalDispatch {
+				   clusterList := qj.Spec.SchedSpec.ClusterScheduling.Clusters
+                   if len(clusterList) == 0 {
+					  klog.Errorf("[Dispatcher Controller] AppWrapper %s does not include a list of clusterIds in Spec.SchedSpec.ClusterScheduling.Clusters.", qj.Name)
+				      return nil
+				   } else {
+					  // choose target clusterId at random
+					  clusterId := clusterList[rand.Int()%len(clusterList)]
+					  klog.V(1).Infof("ClusterId %s is chosen randomly\n", clusterId)
+					  qj.Status.TargetClusterName = clusterId.Name
+				   }
+				} else {
+				   cc.agentMap[agentId].CreateJob(qj)
+				}
 				qj.Status.IsDispatched = true
 			} else {
 				klog.Errorf("[manageQueueJob] [Dispatcher]  AppWrapper %s not found in dispatcher mapping.", qj.Name)
