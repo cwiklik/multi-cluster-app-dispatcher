@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"path"
 	"reflect"
 	"runtime/debug"
 	"sort"
@@ -883,6 +884,32 @@ func addPreemptableAWs(preemptableAWs map[float64][]string, value *arbv1.AppWrap
 }
 
 func (qjm *XController) chooseAgent(ctx context.Context, qj *arbv1.AppWrapper) string {
+
+	
+	if qjm.serverOption.ExternalDispatch {
+		clusters := qj.Spec.SchedSpec.ClusterScheduling.Clusters
+		var agentId = ""
+        apath := path.Dir(qjm.agentList[0]) 
+		var agentIdList = make([]string, len(clusters))
+		clustersProvided := false  // assume clusters not provided
+		for _, clusterRef := range clusters {
+			if clusterRef.Name != "" {
+				clustersProvided = true
+				agentIdList = append(agentIdList, apath+"/"+clusterRef.Name )
+			}
+		}
+		// target clusters no defined by the submitter of workload. Just pick a target
+		// from a known list of clusters provided in serverOption.AgentConfigs
+		if !clustersProvided {
+			agentId = qjm.agentList[rand.Int()%len(qjm.agentList)]
+			klog.V(1).Infof("ClusterId %s is chosen randomly from a list provided by mcad\n", agentId)
+		} else {
+		    // choose target clusterId at random
+		    agentId = agentIdList[rand.Int()%len(agentIdList)]
+		    klog.V(1).Infof("ClusterId %s is chosen randomly from a list provided in Spec.SchedSpec.ClusterScheduling.Clusters: %s\n", agentId, agentIdList)
+		}
+		return agentId;
+	} 
 
 	qjAggrResources := qjm.GetAggregatedResources(qj)
 	klog.V(2).Infof("[chooseAgent] Aggregated Resources of XQJ %s/%s: %v\n", qj.Namespace, qj.Name, qjAggrResources)
