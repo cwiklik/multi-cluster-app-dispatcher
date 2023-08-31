@@ -83,7 +83,6 @@ type AppWrapperService struct {
 	Spec v1.ServiceSpec `json:"spec"`
 }
 
-// AppWrapperGenericResource is App Wrapper aggregation resource
 type AppWrapperGenericResource struct {
 	// Replicas is the number of desired replicas
 	DesiredAvailable int32 `json:"replicas,omitempty" protobuf:"bytes,2,opt,name=desiredavailable"`
@@ -227,6 +226,18 @@ type AppWrapperStatus struct {
 	// Represents multi-cluster observatioins
 	TargetClusterName string `json:"targetClusterName"`
 
+
+	ItemCompletionStatus GenericItemCompletionStatus `json:"itemCompletionStatus,omitempty"`
+}
+
+type GenericItemCompletionStatus struct {
+	GenericItems [] GenericItem `json:"GenericItems,omitempty"`
+}
+
+type GenericItem struct {
+	Name string `json:"name"`
+	Namespace string `json:"namespace"`
+	Condition string `json:"condition"`
 }
 
 type AppWrapperState string
