@@ -846,6 +846,24 @@ spec:
                   the AppWrapper.
                 format: int32
                 type: integer
+              itemCompletionStatus:
+                properties:
+                  GenericItems:
+                    items:
+                      properties:
+                        condition:
+                          type: string
+                        name:
+                          type: string
+                        namespace:
+                          type: string
+                      required:
+                      - condition
+                      - name
+                      - namespace
+                      type: object
+                    type: array
+                type: object  
             type: object
         required:
         - spec
