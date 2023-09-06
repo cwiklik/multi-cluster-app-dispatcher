@@ -523,20 +523,8 @@ func (qjm *XController) GetAggregatedResourcesPerGenericItem(cqj *arbv1.AppWrapp
 
 // Gets all objects owned by AW from API server, check user supplied status and set whole AW status
 func (qjm *XController) getAppWrapperCompletionStatus(caw *arbv1.AppWrapper) (arbv1.AppWrapperState, arbv1.GenericItemCompletionStatus) {
-/*
-	statusField := reflect.ValueOf(caw.Status)
-	if statusField.Kind() != reflect.Struct {
-		klog.Errorf("[getAppWrapperCompletionStatus] Error reflecting Status, %#v", statusField)
-		return caw.Status.State, arbv1.GenericItemCompletionStatus{}
-	}
-	completionStatus := caw.Status.ItemCompletionStatus
-    itemCompletionStatusField := statusField.FieldByName("ItemCompletionStatus")
-	if !itemCompletionStatusField.IsValid() {
-		completionStatus = arbv1.GenericItemCompletionStatus{}
-	} 
-*/
-	completionStatus := arbv1.GenericItemCompletionStatus{}
 
+	completionStatus := arbv1.GenericItemCompletionStatus{}
 	_ = completionStatus
 	// Get all pods and related resources
 	countCompletionRequired := 0
@@ -551,12 +539,21 @@ func (qjm *XController) getAppWrapperCompletionStatus(caw *arbv1.AppWrapper) (ar
 			}
 			unstruct.Object = blob.(map[string]interface{}) // set object to the content of the blob after Unmarshalling
 			name := ""
+			namespace := ""
 			if md, ok := unstruct.Object["metadata"]; ok {
 				metadata := md.(map[string]interface{})
 				if objectName, ok := metadata["name"]; ok {
 					name = objectName.(string)
 				}
+				if objectName, ok := metadata["namespace"]; ok {
+					namespace = objectName.(string)
+				}
 			}
+			_, gvk, err := unstructured.UnstructuredJSONScheme.Decode(objectName.Raw, nil, nil)
+			if err != nil {
+				klog.Errorf("[getAppWrapperCompletionStatus] Error unmarshalling, err=%#v", err)
+			}
+			
 			if len(name) == 0 {
 				klog.Warningf("[getAppWrapperCompletionStatus] object name not present for appwrapper: '%s/%s", caw.Namespace, caw.Name)
 			}
@@ -569,10 +566,16 @@ func (qjm *XController) getAppWrapperCompletionStatus(caw *arbv1.AppWrapper) (ar
 				return caw.Status.State, completionStatus
 			} else {
 				_ = condition
-				genItemCompletionStatus := arbv1.GenericItem {					
-						Name:      caw.Name,
-						Namespace: caw.Namespace,
-						Condition: condition,					
+
+				genItemCompletionStatus := arbv1.GenericItem{
+					ItemGVK: arbv1.ItemGVK{
+						Group:   gvk.Group,
+						Version: gvk.Version,
+						Kind:    gvk.Kind,
+					},
+					Name:      name,
+					Namespace: namespace,
+					Condition: condition,
 				}
 				completionStatus.GenericItems = append(completionStatus.GenericItems, genItemCompletionStatus)
 			}
@@ -2013,6 +2016,7 @@ func (cc *XController) manageQueueJob(ctx context.Context, qj *arbv1.AppWrapper,
 			// are completed
 			//set appwrapper status to Complete or RunningHoldCompletion
 			derivedAwStatus, genericItemsCompletionStatus := cc.getAppWrapperCompletionStatus(qj)
+
 			klog.Infof("[manageQueueJob] Got completion status '%s' for app wrapper '%s/%s' Version=%s Status.CanRun=%t Status.State=%s, pod counts [Pending: %d, Running: %d, Succeded: %d, Failed %d]", derivedAwStatus, qj.Namespace, qj.Name, qj.ResourceVersion,
 			qj.Status.CanRun, qj.Status.State, qj.Status.Pending, qj.Status.Running, qj.Status.Succeeded, qj.Status.Failed)
 
