@@ -875,14 +875,14 @@ spec:
                           properties:
                             Group:
                               type: string
-                            Kind:
-                              type: string
                             Version:
+                              type: string
+                            Kind:
                               type: string
                           required:
                           - Group
-                          - Kind
                           - Version
+                          - Kind
                           type: object  
                         name:
                           type: string
@@ -890,6 +890,7 @@ spec:
                           type: string
                       required:
                       - condition
+                      - gvk
                       - name
                       - namespace
                       type: object

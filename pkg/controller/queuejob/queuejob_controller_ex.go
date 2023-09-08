@@ -603,7 +603,6 @@ func (qjm *XController) GetAggregatedResourcesPerGenericItem(cqj *arbv1.AppWrapp
 func (qjm *XController) getAppWrapperCompletionStatus(caw *arbv1.AppWrapper) (arbv1.AppWrapperState, arbv1.GenericItemCompletionStatus) {
 
 	completionStatus := arbv1.GenericItemCompletionStatus{}
-	_ = completionStatus
 	// Get all pods and related resources
 	countCompletionRequired := 0
 	for i, genericItem := range caw.Spec.AggrResources.GenericItems {
@@ -623,15 +622,27 @@ func (qjm *XController) getAppWrapperCompletionStatus(caw *arbv1.AppWrapper) (ar
 				if objectName, ok := metadata["name"]; ok {
 					name = objectName.(string)
 				}
-				if objectName, ok := metadata["namespace"]; ok {
-					namespace = objectName.(string)
+				if objectNamespace, ok := metadata["namespace"]; ok {
+					if objectNamespace != nil {
+						namespace = objectNamespace.(string)
+					}
+				} 
+			}
+			var gvk = schema.GroupVersionKind{}
+			_, groupversionkind, err := unstructured.UnstructuredJSONScheme.Decode(objectName.Raw, nil, nil)
+			if err != nil || groupversionkind == nil {
+				klog.Errorf("[getAppWrapperCompletionStatus] Error unmarshalling gvk, err=%#v", err)
+				unknown := "Unknown"
+				gvk = schema.GroupVersionKind {
+					Group:   unknown,
+					Version:  unknown,
+					Kind:     unknown,
 				}
 			}
-			_, gvk, err := unstructured.UnstructuredJSONScheme.Decode(objectName.Raw, nil, nil)
-			if err != nil {
-				klog.Errorf("[getAppWrapperCompletionStatus] Error unmarshalling, err=%#v", err)
+            if groupversionkind != nil {
+				gvk = *groupversionkind
 			}
-			
+
 			if len(name) == 0 {
 				klog.Warningf("[getAppWrapperCompletionStatus] object name not present for appwrapper: '%s/%s", caw.Namespace, caw.Name)
 			}
@@ -643,8 +654,6 @@ func (qjm *XController) getAppWrapperCompletionStatus(caw *arbv1.AppWrapper) (ar
 				//early termination because a required item is not completed
 				return caw.Status.State, completionStatus
 			} else {
-				_ = condition
-
 				genItemCompletionStatus := arbv1.GenericItem{
 					GroupVersionKind: schema.GroupVersionKind {
                         Group:   gvk.Group,
@@ -2095,21 +2104,47 @@ func (cc *XController) syncQueueJob(ctx context.Context, qj *arbv1.AppWrapper) e
 // Does NOT modify <activePods>.
 
 func (cc *XController) manageQueueJob(ctx context.Context, qj *arbv1.AppWrapper, podPhaseChanges bool) error {
+	var err error
+	startTime := time.Now()
+	defer func() {
+		klog.V(10).Infof("[worker-manageQJ] Ending %s manageQJ time=%s &qj=%p Version=%s Status=%+v", qj.Name, time.Now().Sub(startTime), qj, qj.ResourceVersion, qj.Status)
+	}()
+
+	if qj.DeletionTimestamp != nil {
+
+		klog.V(4).Infof("[manageQueueJob] AW job=%s/%s set for deletion.", qj.Name, qj.Namespace)
+
+		// cleanup resources for running job
+		err = cc.Cleanup(qj)
+		if err != nil {
+			return err
+		}
+		//empty finalizers and delete the queuejob again
+		accessor, err := meta.Accessor(qj)
+		if err != nil {
+			return err
+		}
+		accessor.SetFinalizers(nil)
+
+		// we delete the job from the queue if it is there
+		cc.qjqueue.Delete(qj)
+
+		return nil
+	}
+	//Job is Complete only update pods if needed.
+	if qj.Status.State == arbv1.AppWrapperStateCompleted || qj.Status.State == arbv1.AppWrapperStateRunningHoldCompletion {
+		if podPhaseChanges {
+			// Only update etcd if AW status has changed.  This can happen for periodic
+			// updates of pod phase counts done in caller of this function.
+			if err := cc.updateEtcd(qj, "manageQueueJob - podPhaseChanges"); err != nil {
+				klog.Errorf("[manageQueueJob] Error updating etc for AW job=%s Status=%+v err=%+v", qj.Name, qj.Status, err)
+			}
+		}
+		return nil
+	}
 
 	if !cc.isDispatcher { // Agent Mode
-		// Job is Complete only update pods if needed.
-		if qj.Status.State == arbv1.AppWrapperStateCompleted || qj.Status.State == arbv1.AppWrapperStateRunningHoldCompletion {
-			if podPhaseChanges {
-				// Only update etcd if AW status has changed.  This can happen for periodic
-				// updates of pod phase counts done in caller of this function.
-				err := cc.updateStatusInEtcdWithRetry(ctx, qj, "manageQueueJob - podPhaseChanges")
-				if err != nil {
-					klog.Errorf("[manageQueueJob] Error updating status for podPhaseChanges for AppWrapper: '%s/%s',Status=%+v, err=%+v.", qj.Namespace, qj.Name, qj.Status, err)
-					return err
-				}
-			}
-			return nil
-		}
+>>>>>>> c795e2a4 (redone gvk. Modified dispatcher so that it handled job completion status)
 
 		// Handle recovery condition
 		if !qj.Status.CanRun && qj.Status.State == arbv1.AppWrapperStateEnqueued && !cc.qjqueue.IfExistUnschedulableQ(qj) && !cc.qjqueue.IfExistActiveQ(qj) {
@@ -2227,7 +2262,8 @@ func (cc *XController) manageQueueJob(ctx context.Context, qj *arbv1.AppWrapper,
 					return err
 				}
 			}
-			// Set appwrapper status to complete
+			
+			//Set appwrapper status to complete
 			if derivedAwStatus == arbv1.AppWrapperStateCompleted {
 				klog.V(1).Infof("[>>>>>>>>>>] Setting ItemCompletionStatus 2")
 				qj.Status.ItemCompletionStatus = genericItemsCompletionStatus
@@ -2261,6 +2297,11 @@ func (cc *XController) manageQueueJob(ctx context.Context, qj *arbv1.AppWrapper,
 			klog.Infof("[manageQueueJob] Done getting completion status for app wrapper '%s/%s' Version=%s Status.CanRun=%t Status.State=%s, pod counts [Pending: %d, Running: %d, Succeded: %d, Failed %d]", qj.Namespace, qj.Name, qj.ResourceVersion,
 				qj.Status.CanRun, qj.Status.State, qj.Status.Pending, qj.Status.Running, qj.Status.Succeeded, qj.Status.Failed)
 
+            if derivedAwStatus == arbv1.AppWrapperStateCompleted {
+	           qj.Status.ItemCompletionStatus = genericItemsCompletionStatus
+			   qj.Status.State = derivedAwStatus
+            }
+			// Bugfix to eliminate performance problem of overloading the event queue.
 		} else if podPhaseChanges { // Continued bug fix
 			// Only update etcd if AW status has changed.  This can happen for periodic
 			// updates of pod phase counts done in caller of this function.
@@ -2269,9 +2310,10 @@ func (cc *XController) manageQueueJob(ctx context.Context, qj *arbv1.AppWrapper,
 				klog.Errorf("[manageQueueJob] Error updating status 'podPhaseChanges' AppWrapper: '%s/%s',Status=%+v, err=%+v.", qj.Namespace, qj.Name, qj.Status, err)
 				return err
 			}
-		}
-		return nil
-	} else { // Dispatcher Mode
+			// Finish adding qj to Etcd for dispatch
+		//	return nil
+		}		
+	} else  { // Dispatcher Mode
 		if !qj.Status.CanRun && (qj.Status.State != arbv1.AppWrapperStateEnqueued && qj.Status.State != arbv1.AppWrapperStateDeleted) {
 			// if there are running resources for this job then delete them because the job was put in
 			// pending state...
@@ -2301,7 +2343,7 @@ func (cc *XController) manageQueueJob(ctx context.Context, qj *arbv1.AppWrapper,
 			cc.qjqueue.AddIfNotPresent(qj)
 			return nil
 		}
-		if qj.Status.CanRun && !qj.Status.IsDispatched {
+		if qj.Status.CanRun && !qj.Status.IsDispatched { 
 			if klog.V(10).Enabled() {
 				current_time := time.Now()
 				klog.V(10).Infof("[worker-manageQJ] XQJ %s has Overhead Before Dispatching: %s", qj.Name, current_time.Sub(qj.CreationTimestamp.Time))
