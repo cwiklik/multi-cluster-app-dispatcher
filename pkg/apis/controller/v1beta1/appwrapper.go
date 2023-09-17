@@ -34,6 +34,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 const AppWrapperPlural string = "appwrappers"
@@ -101,7 +102,7 @@ type AppWrapperService struct {
 }
 
 // AppWrapperResource is App Wrapper aggregation resource
-//todo: To be depricated
+// todo: To be depricated
 type AppWrapperResource struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata"`
@@ -266,11 +267,24 @@ type AppWrapperStatus struct {
 
 	// Represents multi-cluster observatioins
 	TargetClusterName string `json:"targetClusterName"`
+
+	ItemCompletionStatus GenericItemCompletionStatus `json:"itemCompletionStatus,omitempty"`
+}
+
+type GenericItemCompletionStatus struct {
+	GenericItems [] GenericItem `json:"genericItems,omitempty"`
+}
+
+type GenericItem struct {
+	schema.GroupVersionKind `json:"gvk"`
+	Name string `json:"name"`
+	Namespace string `json:"namespace"`
+	Condition string `json:"condition"`
 }
 
 type AppWrapperState string
 
-//enqueued, active, deleting, succeeded, failed
+// enqueued, active, deleting, succeeded, failed
 const (
 	AppWrapperStateEnqueued              AppWrapperState = "Pending"
 	AppWrapperStateActive                AppWrapperState = "Running"

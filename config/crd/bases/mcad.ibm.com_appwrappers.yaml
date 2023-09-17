@@ -889,6 +889,39 @@ spec:
                   (is this different from the MinAvailable from JobStatus)
                 format: int32
                 type: integer
+              itemCompletionStatus:
+                properties:
+                  genericItems:
+                    items:
+                      properties:
+                        condition:
+                          type: string
+                        gvk:
+                          description: Group Version Kind 
+                          properties:
+                            Group:
+                              type: string
+                            Version:
+                              type: string
+                            Kind:
+                              type: string
+                          required:
+                          - Group
+                          - Version
+                          - Kind
+                          type: object  
+                        name:
+                          type: string
+                        namespace:
+                          type: string
+                      required:
+                      - condition
+                      - gvk
+                      - name
+                      - namespace
+                      type: object
+                    type: array
+                type: object  
             type: object
         required:
         - spec
