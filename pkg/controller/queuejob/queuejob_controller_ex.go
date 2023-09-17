@@ -2223,7 +2223,7 @@ func (cc *XController) manageQueueJob(ctx context.Context, qj *arbv1.AppWrapper,
 			//are completed
 			if derivedAwStatus == arbv1.AppWrapperStateRunningHoldCompletion {
 				qj.Status.State = derivedAwStatus
-				klog.V(1).Infof("[>>>>>>>>>>] Setting ItemCompletionStatus 1")
+				klog.V(1).Infof("[manageQueueJob] Setting ItemCompletionStatus 1")
 				qj.Status.ItemCompletionStatus = genericItemsCompletionStatus
 				var updateQj *arbv1.AppWrapper
 				index := getIndexOfMatchedCondition(qj, arbv1.AppWrapperCondRunningHoldCompletion, "SomeItemsCompleted")
@@ -2247,7 +2247,7 @@ func (cc *XController) manageQueueJob(ctx context.Context, qj *arbv1.AppWrapper,
 			
 			//Set appwrapper status to complete
 			if derivedAwStatus == arbv1.AppWrapperStateCompleted {
-				klog.V(1).Infof("[>>>>>>>>>>] Setting ItemCompletionStatus 2")
+				klog.V(1).Infof("[manageQueueJob] Setting ItemCompletionStatus 2")
 				qj.Status.ItemCompletionStatus = genericItemsCompletionStatus
 				qj.Status.State = derivedAwStatus
 				qj.Status.CanRun = false
@@ -2293,8 +2293,8 @@ func (cc *XController) manageQueueJob(ctx context.Context, qj *arbv1.AppWrapper,
 				return err
 			}
 			// Finish adding qj to Etcd for dispatch
-		//	return nil
-		}		
+			return nil
+		}
 	} else  { // Dispatcher Mode
 		if !qj.Status.CanRun && (qj.Status.State != arbv1.AppWrapperStateEnqueued && qj.Status.State != arbv1.AppWrapperStateDeleted) {
 			// if there are running resources for this job then delete them because the job was put in
