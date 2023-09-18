@@ -223,10 +223,6 @@ type AppWrapperStatus struct {
 
 	// Field to keep track of how many times a requeuing event has been triggered
 	NumberOfRequeueings int `json:"numberOfRequeueings,omitempty"`
-	
-	// Represents multi-cluster observatioins
-	TargetClusterName string `json:"targetClusterName"`
-
 
 	ItemCompletionStatus GenericItemCompletionStatus `json:"itemCompletionStatus,omitempty"`
 }

@@ -2354,8 +2354,19 @@ func (cc *XController) manageQueueJob(ctx context.Context, qj *arbv1.AppWrapper,
 				klog.V(10).Infof("[Dispatcher Controller] Dispatched AppWrapper %s to Agent ID: %s.", qj.Name, agentId)
 				if cc.serverOption.ExternalDispatch {
 					values := strings.Split(agentId, "/")
-					klog.V(10).Infof("[Dispatcher Controller] Dispatching AppWrapper %s to Agent ID: %s Through External Dispatcher.", qj.Name, values[len(values)-1])
-					qj.Status.TargetClusterName = values[len(values)-1] //agentId
+					klog.V(10).Infof("[Dispatcher Controller] ... Dispatching AppWrapper %s to Agent ID: %s Through External Dispatcher.", qj.Name, values[len(values)-1])					
+					qj.Spec.SchedSpec.ClusterScheduling.PolicyResult = arbv1.ClusterDecision {
+						TargetCluster: arbv1.ClusterReference{
+							Name: values[len(values)-1],
+						}, 
+						PolicySource : []arbv1.PolicySourceReference {
+							{
+								Name: "MCAD",
+								LastUpdateMicroTime: metav1.MicroTime{Time: time.Now()},
+								Message: "Assigned by MCAD",
+							},
+						},
+					}
 				} else {
 					cc.agentMap[agentId].CreateJob(qj)
 				}
@@ -2373,6 +2384,7 @@ func (cc *XController) manageQueueJob(ctx context.Context, qj *arbv1.AppWrapper,
 				klog.Errorf("Failed to update status of AppWrapper %s/%s: err=%v", qj.Namespace, qj.Name, err)
 				return err
 			}
+			klog.V(10).Infof("[Dispatcher Controller] Update Successfull -  AppWrapper %s .", qj.Name)	
 		}
 		return nil
 	}
