@@ -2286,6 +2286,7 @@ func (cc *XController) manageQueueJob(ctx context.Context, qj *arbv1.AppWrapper,
 			cc.qjqueue.AddIfNotPresent(qj)
 			return nil
 		}
+
 		if qj.Status.CanRun && !qj.Status.IsDispatched { 
 			if klog.V(10).Enabled() {
 				current_time := time.Now()
@@ -2322,12 +2323,14 @@ func (cc *XController) manageQueueJob(ctx context.Context, qj *arbv1.AppWrapper,
 				klog.V(10).Infof("[manageQueueJob] [Dispatcher]  XQJ %s/%s has Overhead After Dispatching: %s", qj.Namespace, qj.Name, current_time.Sub(qj.CreationTimestamp.Time))
 				klog.V(10).Infof("[manageQueueJob] [Dispatcher]  %s/%s, %s: WorkerAfterDispatch", qj.Namespace, qj.Name, time.Now().Sub(qj.CreationTimestamp.Time))
 			}
-			err := cc.updateStatusInEtcdWithRetry(ctx, qj, "[manageQueueJob] [Dispatcher]  -- set dispatched true")
-			if err != nil {
-				klog.Errorf("Failed to update status of AppWrapper %s/%s: err=%v", qj.Namespace, qj.Name, err)
+
+	
+			if _, err := cc.arbclients.ArbV1().AppWrappers(qj.Namespace).Update(qj); err != nil {
+				klog.Errorf("Failed to update status of AppWrapper %v/%v: %v",
+					qj.Namespace, qj.Name, err)
 				return err
 			}
-			klog.V(10).Infof("[Dispatcher Controller] Update Successfull -  AppWrapper %s .", qj.Name)	
+			klog.V(10).Infof("[Dispatcher Controller] Update Successfull -  AppWrapper %s .", qj.Name)		
 		}
 		return nil
 	}
