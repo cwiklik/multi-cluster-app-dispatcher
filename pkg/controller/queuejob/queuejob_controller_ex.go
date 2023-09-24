@@ -2258,7 +2258,8 @@ func (cc *XController) manageQueueJob(qj *arbv1.AppWrapper, podPhaseChanges bool
 			return nil
 		}
 
-		if qj.Status.CanRun && !qj.Status.IsDispatched { //&& qj.Status.State != arbv1.AppWrapperStateCompleted {
+		if qj.Status.CanRun && !qj.Status.IsDispatched { 
+
 			if klog.V(10).Enabled() {
 				current_time := time.Now()
 				klog.V(10).Infof("[worker-manageQJ] XQJ %s has Overhead Before Dispatching: %s", qj.Name, current_time.Sub(qj.CreationTimestamp.Time))
@@ -2269,8 +2270,20 @@ func (cc *XController) manageQueueJob(qj *arbv1.AppWrapper, podPhaseChanges bool
 				klog.V(10).Infof("[Dispatcher Controller] Dispatched AppWrapper %s to Agent ID: %s.", qj.Name, agentId)
 				if cc.serverOption.ExternalDispatch {
 					values := strings.Split(agentId, "/")
-					klog.V(10).Infof("[Dispatcher Controller] Dispatching AppWrapper %s to Agent ID: %s Through External Dispatcher.", qj.Name, values[len(values)-1])
-					qj.Status.TargetClusterName = values[len(values)-1] //agentId
+					klog.V(10).Infof("[Dispatcher Controller] Dispatching AppWrapper %s to Agent ID: %s Through External Dispatcher.", qj.Name, values[len(values)-1])					
+					qj.Spec.SchedSpec.ClusterScheduling.PolicyResult = arbv1.ClusterDecision {
+						TargetCluster: arbv1.ClusterReference{
+							// TODO check if values len > 0.
+							Name: values[len(values)-1],
+						}, 
+						PolicySource : []arbv1.PolicySourceReference {
+							{
+								Name: "MCAD",
+								LastUpdateMicroTime: metav1.MicroTime{Time: time.Now()},
+								Message: "Assigned by MCAD",
+							},
+						},
+					}
 				} else {
 					cc.agentMap[agentId].CreateJob(qj)
 				}
@@ -2283,14 +2296,14 @@ func (cc *XController) manageQueueJob(qj *arbv1.AppWrapper, podPhaseChanges bool
 				klog.V(10).Infof("[Dispatcher Controller] XQJ %s has Overhead After Dispatching: %s", qj.Name, current_time.Sub(qj.CreationTimestamp.Time))
 				klog.V(10).Infof("[TTime] %s, %s: WorkerAfterDispatch", qj.Name, time.Now().Sub(qj.CreationTimestamp.Time))
 			}
-
+	
 			if _, err := cc.arbclients.ArbV1().AppWrappers(qj.Namespace).Update(qj); err != nil {
 				klog.Errorf("Failed to update status of AppWrapper %v/%v: %v",
 					qj.Namespace, qj.Name, err)
 				return err
 			}
+			klog.V(10).Infof("[Dispatcher Controller] Update Successfull -  AppWrapper %s .", qj.Name)		
 		}
-
 	}
 	return err
 }
