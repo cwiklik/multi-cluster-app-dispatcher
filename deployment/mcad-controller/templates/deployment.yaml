@@ -310,10 +310,10 @@ spec:
       volumes:
       - name: temp-vol
         emptyDir: {}
-#{{ if .Values.volumes.hostPath }}
+#{{ if .Values.volumes.agentConfigSecret }}
       - name: agent-config-vol
         secret:
-          secretName: mcad-agents-config
+          secretName: {{ .Values.volumes.agentConfigSecret }}
 #{{ end }}
       containers:
 #{{ if .Values.configMap.quotaRestUrl }}
