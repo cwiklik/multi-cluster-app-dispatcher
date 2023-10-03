@@ -222,8 +222,8 @@ spec:
         emptyDir: {}
 #{{ if .Values.volumes.hostPath }}
       - name: agent-config-vol
-        hostPath:
-          path: {{ .Values.volumes.hostPath }}
+        secret:
+          secretName: mcad-agents-config
 #{{ end }}
       containers:
 #{{ if .Values.configMap.quotaRestUrl }}
