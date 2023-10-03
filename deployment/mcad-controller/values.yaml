@@ -56,6 +56,7 @@ configMap:
 
 volumes:
   hostPath:
+  agentConfigSecret: mcad-agents-config
 
 coscheduler:
   rbac:
