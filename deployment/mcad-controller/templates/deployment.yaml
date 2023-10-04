@@ -2,7 +2,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: custom-metrics-apiserver
-  namespace: {{ .Values.namespace }}
+  namespace: kube-system
 spec:
   ports:
   - name: https
@@ -40,7 +40,7 @@ metadata:
 spec:
   service:
     name: custom-metrics-apiserver
-    namespace: {{ .Values.namespace }}
+    namespace: kube-system
   group: external.metrics.k8s.io
   version: v1beta1
   insecureSkipTLSVerify: true
@@ -54,7 +54,7 @@ metadata:
 spec:
   service:
     name: custom-metrics-apiserver
-    namespace: {{ .Values.namespace }}
+    namespace: kube-system
   group: custom.metrics.k8s.io
   version: v1beta1
   insecureSkipTLSVerify: true
@@ -98,7 +98,7 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: horizontal-pod-autoscaler
-  namespace: {{ .Values.namespace }}
+  namespace: kube-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -185,7 +185,7 @@ metadata:
   labels:
     wdc.ibm.com/ownership: admin
   name: {{ .Values.serviceAccount }}
-  namespace: {{ .Values.namespace }}
+  namespace: kube-system
 #{{ end }}
 ---
 #{{ if .Values.serviceAccount }}
@@ -200,13 +200,13 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: {{ .Values.serviceAccount }}
-  namespace: {{ .Values.namespace }}
+  namespace: kube-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: custom-metrics-auth-reader
-  namespace: {{ .Values.namespace }}
+  namespace: kube-system
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
@@ -214,7 +214,7 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: {{ .Values.serviceAccount }}
-  namespace: {{ .Values.namespace }}
+  namespace: kube-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -227,7 +227,7 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: {{ .Values.serviceAccount }}
-  namespace: {{ .Values.namespace }} 
+  namespace: kube-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -244,7 +244,7 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: {{ .Values.serviceAccount }}
-  namespace: {{ .Values.namespace }}
+  namespace: kube-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -261,7 +261,7 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: {{ .Values.serviceAccount }}
-  namespace: {{ .Values.namespace }}
+  namespace: kube-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -278,14 +278,14 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: {{ .Values.serviceAccount }}
-  namespace: {{ .Values.namespace }}
+  namespace: kube-system
 #{{ end }}
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ .Values.deploymentName }}
-  namespace: {{ .Values.namespace }}
+  namespace: kube-system
   labels:
     chart: "{{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}"
     app: custom-metrics-apiserver
