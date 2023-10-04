@@ -2,7 +2,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: custom-metrics-apiserver
-  namespace: {{ .Values.namespace }}
+  namespace: kube-system
 spec:
   ports:
   - name: https
@@ -40,17 +40,19 @@ metadata:
 spec:
   service:
     name: custom-metrics-apiserver
-    namespace: {{ .Values.namespace }}
+    namespace: kube-system
   group: external.metrics.k8s.io
   version: v1beta1
   insecureSkipTLSVerify: true
   groupPriorityMinimum: 100 
   versionPriority: 100 
+
 #{{ end }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
+
   annotations:
     rbac.authorization.kubernetes.io/autoupdate: "true"
   name: system:controller:xqueuejob-controller
@@ -135,7 +137,7 @@ metadata:
   labels:
     wdc.ibm.com/ownership: admin
   name: {{ .Values.serviceAccount }}
-  namespace: {{ .Values.namespace }}
+  namespace: kube-system
 #{{ end }}
 ---
 #{{ if .Values.serviceAccount }}
@@ -155,7 +157,7 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: {{ .Values.serviceAccount }}
-  namespace: {{ .Values.namespace }}
+  namespace: kube-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -172,7 +174,7 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: {{ .Values.serviceAccount }}
-  namespace: {{ .Values.namespace }}
+  namespace: kube-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -189,14 +191,14 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: {{ .Values.serviceAccount }}
-  namespace: {{ .Values.namespace }}
+  namespace: kube-system
 #{{ end }}
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ .Values.deploymentName }}
-  namespace: {{ .Values.namespace }}
+  namespace: kube-system
   labels:
     chart: "{{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}"
     app: custom-metrics-apiserver
