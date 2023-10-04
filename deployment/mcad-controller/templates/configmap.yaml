@@ -3,7 +3,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: {{ .Values.configMap.name }}
-  namespace: {{ .Values.namespace }}
+  namespace: kube-system
 data:
   QUOTA_ENABLED: {{ .Values.configMap.quotaEnabled }}
   DISPATCHER_MODE: {{ .Values.configMap.dispatcherMode }}
