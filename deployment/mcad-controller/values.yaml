@@ -55,7 +55,7 @@ configMap:
   podCreationTimeout:
 
 volumes:
-  hostPath:
+  agentConfigSecret: mcad-agents-config
 
 coscheduler:
   rbac:
