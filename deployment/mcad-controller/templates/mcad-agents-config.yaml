@@ -1,0 +1,7 @@
+apiVersion: v1
+data:
+kind: Secret
+metadata:
+  name: mcad-agents-config
+  namespace: mcad
+type: Opaque
