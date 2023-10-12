@@ -63,6 +63,23 @@ func Run(opt *options.ServerOption) error {
 	}
 
 	jobctrl := queuejob.NewJobController(restConfig, mcadConfig, extConfig)
+
+	// dispatcher mode or agent mode
+	isDispatcher := opt.Dispatcher
+	if isDispatcher {
+		directory := "/root/kubernetes"
+		for {
+			if filesExist(directory, strings.Split(opt.AgentConfigs, ",")) {
+				break
+			}
+			klog.V(4).Infof("[Server] agent cluster kubeconfig files not available yet, sleeping to recheck after 30 secs")
+			time.Sleep(30 * time.Second)
+		}
+		klog.V(4).Infof("expected agent cluster kubeconfig files found - proceeding to boostrap mcad dispatcher")
+	}
+
+	jobctrl := queuejob.NewJobController(config, opt)
+
 	if jobctrl == nil {
 		return nil
 	}
@@ -75,6 +92,26 @@ func Run(opt *options.ServerOption) error {
 	}
 
 	return nil
+}
+func filesExist(directory string, filenames []string) bool {
+
+	for _, filename := range filenames {
+		filePath := filepath.Join(directory, filename)
+		if strings.Contains(filePath,":") {
+			filePath = strings.Split(filePath, ":")[0]
+		}
+		
+		_, err := os.Stat(filePath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				klog.Error("File %s does not exist yet", filePath)
+				return false
+			}
+			klog.Error("error while checking for existance of cluster kubeconfig files in %s, error %v", directory, err)
+			return false
+		}
+	}
+	return true
 }
 
 // Starts the health probe listener
