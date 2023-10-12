@@ -31,9 +31,15 @@ limitations under the License.
 package app
 
 import (
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	"net/http"
+	"k8s.io/klog/v2"
 
 	"github.com/project-codeflare/multi-cluster-app-dispatcher/cmd/kar-controllers/app/options"
 	"github.com/project-codeflare/multi-cluster-app-dispatcher/pkg/controller/queuejob"
@@ -60,6 +66,20 @@ func Run(opt *options.ServerOption) error {
 	config.QPS = 100.0
 	config.Burst = 200.0
 
+	// dispatcher mode or agent mode
+	isDispatcher := opt.Dispatcher
+	if isDispatcher {
+		directory := "/root/kubernetes"
+		for {
+			if filesExist(directory, strings.Split(opt.AgentConfigs, ",")) {
+				break
+			}
+			klog.V(4).Infof("[Server] agent cluster kubeconfig files not available yet, sleeping to recheck after 30 secs")
+			time.Sleep(30 * time.Second)
+		}
+		klog.V(4).Infof("expected agent cluster kubeconfig files found - proceeding to boostrap mcad dispatcher")
+	}
+
 	jobctrl := queuejob.NewJobController(config, opt)
 	if jobctrl == nil {
 		return nil
@@ -73,6 +93,26 @@ func Run(opt *options.ServerOption) error {
 	}
 
 	return nil
+}
+func filesExist(directory string, filenames []string) bool {
+
+	for _, filename := range filenames {
+		filePath := filepath.Join(directory, filename)
+		if strings.Contains(filePath,":") {
+			filePath = strings.Split(filePath, ":")[0]
+		}
+		
+		_, err := os.Stat(filePath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				klog.Error("File %s does not exist yet", filePath)
+				return false
+			}
+			klog.Error("error while checking for existance of cluster kubeconfig files in %s, error %v", directory, err)
+			return false
+		}
+	}
+	return true
 }
 
 // Starts the health probe listener
