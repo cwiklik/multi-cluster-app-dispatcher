@@ -51,6 +51,9 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+
+	"k8s.io/apimachinery/pkg/runtime/schema"
+
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -566,7 +569,7 @@ func (qjm *XController) GetAggregatedResourcesPerGenericItem(cqj *arbv1.AppWrapp
 
 	// Get all pods and related resources
 	for _, genericItem := range cqj.Spec.AggrResources.GenericItems {
-		itemsList, _ := generxicresource.GetListOfPodResourcesFromOneGenericItem(&genericItem)
+		itemsList, _ := genericresource.GetListOfPodResourcesFromOneGenericItem(&genericItem)
 		for i := 0; i < len(itemsList); i++ {
 			retVal = append(retVal, itemsList[i])
 		}
@@ -581,7 +584,7 @@ func (qjm *XController) getAppWrapperCompletionStatus(caw *arbv1.AppWrapper) (ar
 	completionStatus := arbv1.GenericItemCompletionStatus{}
 	// Get all pods and related resources
 	countCompletionRequired := 0
-	for i, genericItem := range caw.Spec.AggrResources.GenericItems {
+	for _, genericItem := range caw.Spec.AggrResources.GenericItems {
 		if len(genericItem.CompletionStatus) > 0 {
 			objectName := genericItem.GenericTemplate
 			var unstruct unstructured.Unstructured
@@ -2057,7 +2060,7 @@ func (cc *XController) manageQueueJob(ctx context.Context, qj *arbv1.AppWrapper,
 		klog.V(4).Infof("[manageQueueJob] AW job=%s/%s set for deletion.", qj.Name, qj.Namespace)
 
 		// cleanup resources for running job
-		err = cc.Cleanup(qj)
+		err = cc.Cleanup(ctx, qj)
 		if err != nil {
 			return err
 		}
@@ -2078,7 +2081,7 @@ func (cc *XController) manageQueueJob(ctx context.Context, qj *arbv1.AppWrapper,
 		if podPhaseChanges {
 			// Only update etcd if AW status has changed.  This can happen for periodic
 			// updates of pod phase counts done in caller of this function.
-			if err := cc.updateEtcd(qj, "manageQueueJob - podPhaseChanges"); err != nil {
+			if _,err := cc.updateEtcd(ctx, qj, "manageQueueJob - podPhaseChanges"); err != nil {
 				klog.Errorf("[manageQueueJob] Error updating etc for AW job=%s Status=%+v err=%+v", qj.Name, qj.Status, err)
 			}
 		}
@@ -2086,7 +2089,6 @@ func (cc *XController) manageQueueJob(ctx context.Context, qj *arbv1.AppWrapper,
 	}
 
 	if !cc.isDispatcher { // Agent Mode
->>>>>>> c795e2a4 (redone gvk. Modified dispatcher so that it handled job completion status)
 
 		// Handle recovery condition
 		if !qj.Status.CanRun && qj.Status.State == arbv1.AppWrapperStateEnqueued && !cc.qjqueue.IfExistUnschedulableQ(qj) && !cc.qjqueue.IfExistActiveQ(qj) {
@@ -2314,7 +2316,7 @@ func (cc *XController) manageQueueJob(ctx context.Context, qj *arbv1.AppWrapper,
 						},
 					}
 				} else {
-					cc.agentMap[agentId].CreateJob(qj)
+					cc.agentMap[agentId].CreateJob(ctx, qj)
 				}
 				qj.Status.IsDispatched = true
 			} else {
@@ -2326,15 +2328,15 @@ func (cc *XController) manageQueueJob(ctx context.Context, qj *arbv1.AppWrapper,
 			}
 
 	
-			if _, err := cc.arbclients.ArbV1().AppWrappers(qj.Namespace).Update(qj); err != nil {
+			if _, err := cc.arbclients.McadV1beta1().AppWrappers(qj.Namespace).Update(ctx, qj, metav1.UpdateOptions{}); err != nil {
 				klog.Errorf("Failed to update status of AppWrapper %v/%v: %v",
 					qj.Namespace, qj.Name, err)
 				return err
 			}
 			klog.V(10).Infof("[Dispatcher Controller] Update Successfull -  AppWrapper %s .", qj.Name)		
 		}
-		return nil
 	}
+	return nil
 }
 
 // Cleanup function
@@ -2367,7 +2369,7 @@ func (cc *XController) Cleanup(ctx context.Context, appwrapper *arbv1.AppWrapper
 			queuejobKey, _ := GetQueueJobKey(appwrapper)
 			if obj, ok := cc.dispatchMap[queuejobKey]; ok {
 				if !cc.serverOption.ExternalDispatch {
-					cc.agentMap[obj].DeleteJob(appwrapper)
+					cc.agentMap[obj].DeleteJob(ctx, appwrapper)
 				}
 				delete(cc.dispatchMap,queuejobKey)
 			}
