@@ -3,5 +3,5 @@ data:
 kind: Secret
 metadata:
   name: mcad-agents-config
-  namespace: mcad
+  namespace: {{ .Values.namespace }}
 type: Opaque
