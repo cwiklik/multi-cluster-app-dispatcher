@@ -46,8 +46,6 @@ spec:
                 properties:
                   GenericItems:
                     items:
-                      description: AppWrapperGenericResource is App Wrapper aggregation
-                        resource
                       properties:
                         allocated:
                           description: The number of allocated replicas from this
@@ -135,93 +133,38 @@ spec:
                   generic items wrapped inside AppWrappers. It defines the policy
                   for requeuing jobs based on the number of running pods.
                 properties:
-                  minAvailable:
-                    description: Expected number of pods in running and/or completed state. Requeuing is triggered
-                      when the number of running/completed pods is not equal to this value. When not specified,
-                      requeuing is disabled and no check is performed.
-                    type: integer
-                  requeuing:
-                    description: Specification of the requeuing strategy based on waiting time. Values in this field
-                      control how often the pod check should happen and if requeuing has reached its maximum number of
-                      times.
-                    properties:
-                      initialTimeInSeconds:
-                        description: Value to keep track of the initial wait time. Users cannot set this as it is
-                          taken from 'timeInSeconds'.
-                        type: integer
-                      timeInSeconds:
-                        description: Initial waiting time before requeuing conditions are checked. This value is
-                          specified by the user, but it may grow as requeuing events happen.
-                        type: integer
-                        default: 300
-                      maxTimeInSeconds:
-                        description: Maximum waiting time for requeuing checks
-                        type: integer
-                        default: 0
-                      growthType:
-                        description: Growth strategy to increase the waiting time between requeuing checks. The values
-                          available are 'exponential', 'linear', or 'none'. For example, 'exponential' growth would
-                          double the 'timeInSeconds' value every time a requeuing event is triggered. If the string value
-                          is misspelled or not one of the possible options, the growth behavior is defaulted to 'none'.
-                        type: string
-                        default: "exponential"
-                      numRequeuings:
-                        description: Field to keep track of how many times a requeuing event has been triggered
-                        type: integer
-                        default: 0
-                      maxNumRequeuings:
-                        description: Maximum number of requeuing events allowed. Once this value is reached (e.g.,
-                          'numRequeuings = maxNumRequeuings', no more requeuing checks are performed and the generic
-                          items are stopped and removed from the cluster (AppWrapper remains deployed).
-                        type: integer
-                        default: 0
-                    type: object
                   clusterScheduling:
-                    description: Stanza to define cluster allocation restrictions.
-                      Used only in multiCluster mode.
                     properties:
-                      clusters:
-                        description: Specifies cluster IDs for allocation
-                          restrictions.  Used only in
-                          multiCluster mode.
-                        items:
-                          properties:
-                            name:
-                              description: Cluster ID name.  Used only in
-                                multiCluster mode.
-                              type: string
-                          type: object
-                        type: array
                       clusterSelector:
-                        description: (UNSUPPORTED FIELD) A label selector is a label
-                          query over a set of cluster objects.  The result of
-                          matchLabels and matchExpressions are ANDed. An empty
-                          label selector matches all objects. A null label selector
-                          matches no objects.
+                        description: A label selector is a label query over a set
+                          of resources. The result of matchLabels and matchExpressions
+                          are ANDed. An empty label selector matches all objects.
+                          A null label selector matches no objects.
                         properties:
                           matchExpressions:
-                            description: matchExpressions is a list of label selector requirements.
-                              The requirements are ANDed.
+                            description: matchExpressions is a list of label selector
+                              requirements. The requirements are ANDed.
                             items:
-                              description: A label selector requirement is a selector that
-                                contains values, a key, and an operator that relates the key
-                                and values.
+                              description: A label selector requirement is a selector
+                                that contains values, a key, and an operator that
+                                relates the key and values.
                               properties:
                                 key:
-                                  description: key is the label key that the selector applies
-                                    to.
+                                  description: key is the label key that the selector
+                                    applies to.
                                   type: string
                                 operator:
-                                  description: operator represents a key's relationship to
-                                    a set of values. Valid operators are In, NotIn, Exists
-                                    and DoesNotExist.
+                                  description: operator represents a key's relationship
+                                    to a set of values. Valid operators are In, NotIn,
+                                    Exists and DoesNotExist.
                                   type: string
                                 values:
-                                  description: values is an array of string values. If the
-                                    operator is In or NotIn, the values array must be non-empty.
-                                    If the operator is Exists or DoesNotExist, the values
-                                    array must be empty. This array is replaced during a strategic
-                                    merge patch.
+                                  description: values is an array of string values.
+                                    If the operator is In or NotIn, the values array
+                                    must be non-empty. If the operator is Exists or
+                                    DoesNotExist, the values array must be empty.
+                                    This array is replaced during a strategic merge
+                                    patch.
                                   items:
                                     type: string
                                   type: array
@@ -233,31 +176,43 @@ spec:
                           matchLabels:
                             additionalProperties:
                               type: string
-                            description: matchLabels is a map of {key,value} pairs. A single
-                              {key,value} in the matchLabels map is equivalent to an element
-                              of matchExpressions, whose key field is "key", the operator
-                              is "In", and the values array contains only "value". The requirements
-                              are ANDed.
+                            description: matchLabels is a map of {key,value} pairs.
+                              A single {key,value} in the matchLabels map is equivalent
+                              to an element of matchExpressions, whose key field is
+                              "key", the operator is "In", and the values array contains
+                              only "value". The requirements are ANDed.
                             type: object
                         type: object
+                        x-kubernetes-map-type: atomic
+                      clusters:
+                        items:
+                          properties:
+                            name:
+                              type: string
+                          required:
+                          - name
+                          type: object
+                        type: array
                       policyResult:
                         properties:
                           policySource:
                             items:
-                                properties:
-                                  lastUpdateMicroTime:
-                                    description: The latest time this condition was updated.
-                                    format: date-time
-                                    type: string
-                                  message:
-                                    description: A human readable message indicating details
-                                       about the cluster decision.
-                                    type: string
-                                  name:
-                                    description: ID/Name of the policy decision maker.  Most
-                                       often this will be MCAD but design can support alternatives
-                                    type: string
-                                type: object
+                              properties:
+                                lastUpdateMicroTime:
+                                  description: The latest time this condition was
+                                    updated.
+                                  format: date-time
+                                  type: string
+                                message:
+                                  description: A human readable message indicating
+                                    details about the cluster decision.
+                                  type: string
+                                name:
+                                  description: ID/Name of the policy decision maker.  Most
+                                    often this will be MCAD but design can support
+                                    alternatives
+                                  type: string
+                              type: object
                             type: array
                           targetCluster:
                             properties:
@@ -266,7 +221,7 @@ spec:
                             required:
                             - name
                             type: object
-                        type: object    
+                        type: object
                     type: object
                   dispatchDuration:
                     description: Wall clock duration time of appwrapper in seconds.
@@ -788,6 +743,31 @@ spec:
               isdispatched:
                 description: Is Dispatched?
                 type: boolean
+              itemCompletionStatus:
+                properties:
+                  genericItems:
+                    items:
+                      properties:
+                        condition:
+                          type: string
+                        gvk:
+                          description: GroupVersionKind unambiguously identifies a
+                            kind.  It doesn't anonymously include GroupVersion to
+                            avoid automatic coercion.  It doesn't use a GroupVersion
+                            to avoid custom marshalling
+                          type: object
+                        name:
+                          type: string
+                        namespace:
+                          type: string
+                      required:
+                      - condition
+                      - gvk
+                      - name
+                      - namespace
+                      type: object
+                    type: array
+                type: object
               local:
                 description: Indicate if message is a duplicate (for Informer to recognize
                   duplicate messages)
@@ -888,39 +868,6 @@ spec:
                   the AppWrapper.
                 format: int32
                 type: integer
-              itemCompletionStatus:
-                properties:
-                  genericItems:
-                    items:
-                      properties:
-                        condition:
-                          type: string
-                        gvk:
-                          description: Group Version Kind 
-                          properties:
-                            Group:
-                              type: string
-                            Version:
-                              type: string
-                            Kind:
-                              type: string
-                          required:
-                          - Group
-                          - Version
-                          - Kind
-                          type: object  
-                        name:
-                          type: string
-                        namespace:
-                          type: string
-                      required:
-                      - condition
-                      - gvk
-                      - name
-                      - namespace
-                      type: object
-                    type: array
-                type: object  
             type: object
         required:
         - spec
