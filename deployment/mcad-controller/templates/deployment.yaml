@@ -98,7 +98,7 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: horizontal-pod-autoscaler
-  namespace: {{ .Values.namespace }}
+  namespace: kube-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -208,7 +208,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: custom-metrics-auth-reader
-  namespace: {{ .Values.namespace }}
+  namespace: kube-system
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
