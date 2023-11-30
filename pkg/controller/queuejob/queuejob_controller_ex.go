@@ -44,7 +44,6 @@ import (
 	"github.com/project-codeflare/multi-cluster-app-dispatcher/pkg/controller/quota"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -551,19 +550,26 @@ func (qjm *XController) getAppWrapperCompletionStatus(caw *arbv1.AppWrapper) (ar
 					}
 				} 
 			}
-			var gvk = schema.GroupVersionKind{}
+			var gvk = arbv1.ItemGVK{}
 			_, groupversionkind, err := unstructured.UnstructuredJSONScheme.Decode(objectName.Raw, nil, nil)
 			if err != nil || groupversionkind == nil {
 				klog.Errorf("[getAppWrapperCompletionStatus] Error unmarshalling gvk, err=%#v", err)
 				unknown := "Unknown"
-				gvk = schema.GroupVersionKind {
+				gvk = arbv1.ItemGVK{
 					Group:   unknown,
 					Version:  unknown,
 					Kind:     unknown,
 				}
 			}
             if groupversionkind != nil {
-				gvk = *groupversionkind
+				gvk = arbv1.ItemGVK{
+					Group:   groupversionkind.Group,
+					Version:  groupversionkind.Version,
+					Kind:     groupversionkind.Kind,
+				}
+				klog.Infof("[getAppWrapperCompletionStatus] - groupversionkind: %v",gvk)
+			} else {
+				klog.Infof("[getAppWrapperCompletionStatus] - groupversionkind NOT available")
 			}
 
 			if len(name) == 0 {
@@ -578,12 +584,11 @@ func (qjm *XController) getAppWrapperCompletionStatus(caw *arbv1.AppWrapper) (ar
 				return caw.Status.State, completionStatus
 			} else {
 				genItemCompletionStatus := arbv1.GenericItem{
-					GroupVersionKind: schema.GroupVersionKind {
-                        Group:   gvk.Group,
+					Gvk: arbv1.ItemGVK {
+						Group: gvk.Group,
 						Version: gvk.Version,
-						Kind:    gvk.Kind,
+						Kind: gvk.Kind,
 					},
-
 					Name:      name,
 					Namespace: namespace,
 					Condition: condition,

@@ -734,10 +734,19 @@ spec:
                         condition:
                           type: string
                         gvk:
-                          description: GroupVersionKind unambiguously identifies a
-                            kind.  It doesn't anonymously include GroupVersion to
-                            avoid automatic coercion.  It doesn't use a GroupVersion
-                            to avoid custom marshalling
+                          description: Group   string `json:"group"` Version string
+                            `json:"version"` Kind    string `json:"kind"` 
+                          properties:
+                            group:
+                              type: string
+                            version:
+                              type: string
+                            kind:
+                              type: string
+                          required:
+                          - group
+                          - version
+                          - kind
                           type: object
                         name:
                           type: string
