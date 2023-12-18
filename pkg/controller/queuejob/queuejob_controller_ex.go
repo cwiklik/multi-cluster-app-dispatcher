@@ -240,6 +240,7 @@ func NewJobController(restConfig *rest.Config, mcadConfig *config.MCADConfigurat
 		// cache:        clusterstatecache.New(config),
 		schedulingAW: nil,
 	}
+
 	// TODO: work on enabling metrics adapter for correct MCAD mode
 	// metrics adapter is implemented through dynamic client which looks at all the
 	// resources installed in the cluster to construct cache. May be this is need in
@@ -2343,7 +2344,9 @@ func (cc *XController) manageQueueJob(ctx context.Context, qj *arbv1.AppWrapper,
 			queuejobKey, _ := GetQueueJobKey(qj)
 			if agentId, ok := cc.dispatchMap[queuejobKey]; ok {
 				klog.V(10).Infof("[Dispatcher Controller] Dispatched AppWrapper %s to Agent ID: %s.", qj.Name, agentId)
-				if cc.serverOption.ExternalDispatch {
+				policyResult := qj.Spec.SchedSpec.ClusterScheduling.PolicyResult
+				// check if policyResult is already set
+				if cc.serverOption.ExternalDispatch && reflect.ValueOf(policyResult).IsZero() {					
 					values := strings.Split(agentId, "/")
 					klog.V(10).Infof("[Dispatcher Controller] Dispatching AppWrapper %s to Agent ID: %s Through External Dispatcher.", qj.Name, values[len(values)-1])					
 					qj.Spec.SchedSpec.ClusterScheduling.PolicyResult = arbv1.ClusterDecision {
