@@ -2203,10 +2203,17 @@ func (cc *XController) manageQueueJob(ctx context.Context, qj *arbv1.AppWrapper,
 							},
 						},
 					}
+					labels := qj.Labels
+					if labels == nil {
+						labels = make(map[string]string)
+					}
+                    labels["target-cluster"] = qj.Spec.SchedSpec.ClusterScheduling.PolicyResult.TargetCluster.Name
+					qj.Labels = labels
 				} else {
 					cc.agentMap[agentId].CreateJob(ctx, qj)
 				}
 				qj.Status.IsDispatched = true
+				
 			} else {
 				klog.Errorf("[Dispatcher Controller] AppWrapper %s not found in dispatcher mapping.", qj.Name)
 			}
