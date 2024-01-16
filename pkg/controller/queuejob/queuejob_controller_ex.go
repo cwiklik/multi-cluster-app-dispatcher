@@ -51,6 +51,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -60,6 +61,29 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
+
+
+	v1 "k8s.io/api/core/v1"
+
+	"github.com/project-codeflare/multi-cluster-app-dispatcher/pkg/controller/queuejobresources"
+	"github.com/project-codeflare/multi-cluster-app-dispatcher/pkg/controller/queuejobresources/genericresource"
+	respod "github.com/project-codeflare/multi-cluster-app-dispatcher/pkg/controller/queuejobresources/pod"
+	"k8s.io/apimachinery/pkg/labels"
+
+	arbv1 "github.com/project-codeflare/multi-cluster-app-dispatcher/pkg/apis/controller/v1beta1"
+	clientset "github.com/project-codeflare/multi-cluster-app-dispatcher/pkg/client/clientset/versioned"
+
+	informerFactory "github.com/project-codeflare/multi-cluster-app-dispatcher/pkg/client/informers/externalversions"
+	arbinformers "github.com/project-codeflare/multi-cluster-app-dispatcher/pkg/client/informers/externalversions/controller/v1beta1"
+
+	arblisters "github.com/project-codeflare/multi-cluster-app-dispatcher/pkg/client/listers/controller/v1beta1"
+
+	"github.com/project-codeflare/multi-cluster-app-dispatcher/pkg/controller/queuejobdispatch"
+
+	clusterstateapi "github.com/project-codeflare/multi-cluster-app-dispatcher/pkg/controller/clusterstate/api"
+	clusterstatecache "github.com/project-codeflare/multi-cluster-app-dispatcher/pkg/controller/clusterstate/cache"
+
+	names "k8s.io/apiserver/pkg/storage/names"
 )
 
 // defaultBackoffTime is the default backoff time in seconds
@@ -2327,9 +2351,16 @@ func (cc *XController) manageQueueJob(ctx context.Context, qj *arbv1.AppWrapper,
 					}
                     labels["target-cluster"] = qj.Spec.SchedSpec.ClusterScheduling.PolicyResult.TargetCluster.Name
 					qj.Labels = labels
+					if err := cc.genNamesForGenericItemsIfNeeded(ctx, qj) ; err != nil {
+						klog.Errorf("[manageQueueJob] [Dispatcher] Error in [genNamesForGenericItemsIfNeeded], err=%#v",err)
+						return err
+					}
 				} else {
 					cc.agentMap[agentId].CreateJob(ctx, qj)
 				}
+				
+
+
 				qj.Status.IsDispatched = true
 				
 			} else {
@@ -2351,7 +2382,52 @@ func (cc *XController) manageQueueJob(ctx context.Context, qj *arbv1.AppWrapper,
 	}
 	return nil
 }
-
+func (cc *XController) genNamesForGenericItemsIfNeeded(ctx context.Context, appwrapper *arbv1.AppWrapper) error {
+	var container = []arbv1.AppWrapperGenericResource{}
+	var replace = false
+	// NOTE: loop through each generic item and assign generated name if one is not provided
+	for _, genericItem := range appwrapper.Spec.AggrResources.GenericItems {
+			objectName := genericItem.GenericTemplate			
+			var unstruct unstructured.Unstructured
+			unstruct.Object = make(map[string]interface{})
+			var blob interface{}
+			if err := jsons.Unmarshal(objectName.Raw, &blob); err != nil {
+				klog.Errorf("[genNamesForGenericItemsIfNeeded] Error unmarshalling, err=%#v", err)
+				return err
+			}
+			unstruct.Object = blob.(map[string]interface{}) // set object to the content of the blob after Unmarshalling
+			name := ""
+			if md, ok := unstruct.Object["metadata"]; ok {
+				metadata := md.(map[string]interface{})
+				if ns, ok := metadata["namespace"]; ok {
+					if appwrapper.Namespace != ns {
+						return errors.New("genericItem namespace does not match appwrapper namespace:"+appwrapper.Namespace)
+					}
+				}
+				if _, ok := metadata["name"]; !ok {
+					replace = true
+					name = names.SimpleNameGenerator.GenerateName(appwrapper.Name+"-")
+			        klog.V(10).Infof("[genNamesForGenericItemsIfNeeded] Generated name for resource: %s .", name)
+					if err := unstructured.SetNestedField(unstruct.Object, name, "metadata", "name" ) ; err != nil {
+						klog.Error(err)
+						return err
+					}
+					var gt runtime.RawExtension
+					if err := runtime.DefaultUnstructuredConverter.FromUnstructured(unstruct.Object, &gt) ; err != nil {
+						klog.Errorf("[genNamesForGenericItemsIfNeeded] Error marshalling, err=%#v",err)
+						return err
+					}
+					genericItem.GenericTemplate = gt
+				}
+				container = append(container, genericItem)
+			}
+		}
+		// replace genericItems if at least one item was missing a name and the code above generated it 
+		if replace && len(container) > 0 {
+			appwrapper.Spec.AggrResources.GenericItems = container
+		}
+	return nil
+}
 // Cleanup function
 func (cc *XController) Cleanup(ctx context.Context, appwrapper *arbv1.AppWrapper) error {
 	klog.V(3).Infof("[Cleanup] begin AppWrapper '%s/%s' Version=%s", appwrapper.Namespace, appwrapper.Name, appwrapper.ResourceVersion)
