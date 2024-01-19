@@ -661,9 +661,12 @@ func (qjm *XController) getAppWrapperCompletionStatus(caw *arbv1.AppWrapper) (ar
 
 			status, condition := qjm.genericresources.IsItemCompleted(&genericItem, caw.Namespace, caw.Name, name)
 			if !status {
+				klog.Infof("[getAppWrapperCompletionStatus] - status NOT available")
 				//early termination because a required item is not completed
 				return caw.Status.State, completionStatus
 			} else {
+				klog.Infof("[getAppWrapperCompletionStatus] - adding GenericItem completion status ")
+
 				genItemCompletionStatus := arbv1.GenericItem{
 					Gvk: arbv1.ItemGVK {
 						Group: gvk.Group,
@@ -675,6 +678,7 @@ func (qjm *XController) getAppWrapperCompletionStatus(caw *arbv1.AppWrapper) (ar
 					Condition: condition,
 				}
 				completionStatus.GenericItems = append(completionStatus.GenericItems, genItemCompletionStatus)
+				klog.Infof("[getAppWrapperCompletionStatus] - GenericItem completion status added: %v",genItemCompletionStatus)
 			}
 
 			// only consider count completion required for valid items
@@ -1589,7 +1593,7 @@ func (qjm *XController) UpdateQueueJobs(newjob *arbv1.AppWrapper) {
 		}
 		klog.V(6).Infof("[UpdateQueueJobs] %s: qjqueue=%t &qj=%p Version=%s Status=%+v", newjob.Name, qjm.qjqueue.IfExist(newjob), newjob, newjob.ResourceVersion, newjob.Status)
 		// set appwrapper status to Complete or RunningHoldCompletion
-		derivedAwStatus := qjm.getAppWrapperCompletionStatus(newjob)
+		derivedAwStatus, genericItemsCompletionStatus := qjm.getAppWrapperCompletionStatus(newjob)
 
 		klog.Infof("[UpdateQueueJobs]  Got completion status '%s' for app wrapper '%s/%s' Version=%s Status.CanRun=%t Status.State=%s, pod counts [Pending: %d, Running: %d, Succeded: %d, Failed %d]", derivedAwStatus, newjob.Namespace, newjob.Name, newjob.ResourceVersion,
 			newjob.Status.CanRun, newjob.Status.State, newjob.Status.Pending, newjob.Status.Running, newjob.Status.Succeeded, newjob.Status.Failed)
@@ -1598,6 +1602,9 @@ func (qjm *XController) UpdateQueueJobs(newjob *arbv1.AppWrapper) {
 		// are completed
 		if derivedAwStatus == arbv1.AppWrapperStateRunningHoldCompletion {
 			newjob.Status.State = derivedAwStatus
+			klog.V(1).Infof("[manageQueueJob] Setting ItemCompletionStatus 3")
+			newjob.Status.ItemCompletionStatus = genericItemsCompletionStatus
+
 			var updateQj *arbv1.AppWrapper
 			index := getIndexOfMatchedCondition(newjob, arbv1.AppWrapperCondRunningHoldCompletion, "SomeItemsCompleted")
 			if index < 0 {
@@ -1619,6 +1626,9 @@ func (qjm *XController) UpdateQueueJobs(newjob *arbv1.AppWrapper) {
 		}
 		// Set appwrapper status to complete
 		if derivedAwStatus == arbv1.AppWrapperStateCompleted {
+			klog.V(1).Infof("[manageQueueJob] Setting ItemCompletionStatus 4")
+			newjob.Status.ItemCompletionStatus = genericItemsCompletionStatus
+
 			newjob.Status.State = derivedAwStatus
 			newjob.Status.CanRun = false
 			var updateQj *arbv1.AppWrapper
@@ -2407,7 +2417,7 @@ func (cc *XController) manageQueueJob(ctx context.Context, qj *arbv1.AppWrapper,
 			}
 
 	
-			if _, err := cc.arbclients.McadV1beta1().AppWrappers(qj.Namespace).Update(ctx, qj, metav1.UpdateOptions{}); err != nil {
+			if _, err := cc.arbclients.WorkloadV1beta1().AppWrappers(qj.Namespace).Update(ctx, qj, metav1.UpdateOptions{}); err != nil {
 				klog.Errorf("Failed to update status of AppWrapper %v/%v: %v",
 					qj.Namespace, qj.Name, err)
 				return err
