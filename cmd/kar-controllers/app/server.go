@@ -27,16 +27,9 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
-
-	"github.com/project-codeflare/multi-cluster-app-dispatcher/cmd/kar-controllers/app/options"
-	"github.com/project-codeflare/multi-cluster-app-dispatcher/pkg/controller/queuejob"
-	"github.com/project-codeflare/multi-cluster-app-dispatcher/pkg/health"
+	"k8s.io/utils/pointer"
 
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
-
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/utils/pointer"
 
 	"github.com/project-codeflare/multi-cluster-app-dispatcher/cmd/kar-controllers/app/options"
 	"github.com/project-codeflare/multi-cluster-app-dispatcher/pkg/config"
@@ -75,9 +68,19 @@ func Run(opt *options.ServerOption) error {
 		}
 		klog.V(4).Infof("expected agent cluster kubeconfig files found - proceeding to boostrap mcad dispatcher")
 	}
+	mcadConfig := &config.MCADConfiguration{
+		DynamicPriority:       pointer.Bool(opt.DynamicPriority),
+		Preemption:            pointer.Bool(opt.Preemption),
+		BackoffTime:           pointer.Int32(int32(opt.BackoffTime)),
+		HeadOfLineHoldingTime: pointer.Int32(int32(opt.HeadOfLineHoldingTime)),
+		QuotaEnabled:          &opt.QuotaEnabled,
+	}
+	extConfig := &config.MCADConfigurationExtended{
+		Dispatcher:   pointer.Bool(opt.Dispatcher),
+		AgentConfigs: strings.Split(opt.AgentConfigs, ","),
+	}
 
-	jobctrl := queuejob.NewJobController(config, opt)
-
+	jobctrl := queuejob.NewJobController(restConfig, opt,  mcadConfig, extConfig)
 	if jobctrl == nil {
 		return nil
 	}

@@ -35,6 +35,7 @@ import (
 	"github.com/hashicorp/go-multierror"
 	dto "github.com/prometheus/client_model/go"
 
+	"github.com/project-codeflare/multi-cluster-app-dispatcher/cmd/kar-controllers/app/options"
 	arbv1 "github.com/project-codeflare/multi-cluster-app-dispatcher/pkg/apis/controller/v1beta1"
 	clientset "github.com/project-codeflare/multi-cluster-app-dispatcher/pkg/client/clientset/versioned"
 	informerFactory "github.com/project-codeflare/multi-cluster-app-dispatcher/pkg/client/informers/externalversions"
@@ -54,8 +55,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 
-	"k8s.io/apimachinery/pkg/runtime/schema"
-
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -66,29 +65,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
-
-	v1 "k8s.io/api/core/v1"
-
-	"github.com/project-codeflare/multi-cluster-app-dispatcher/pkg/controller/queuejobresources"
-	"github.com/project-codeflare/multi-cluster-app-dispatcher/pkg/controller/queuejobresources/genericresource"
-	respod "github.com/project-codeflare/multi-cluster-app-dispatcher/pkg/controller/queuejobresources/pod"
-	"k8s.io/apimachinery/pkg/labels"
-
-	arbv1 "github.com/project-codeflare/multi-cluster-app-dispatcher/pkg/apis/controller/v1beta1"
-	clientset "github.com/project-codeflare/multi-cluster-app-dispatcher/pkg/client/clientset/versioned"
-
-	informerFactory "github.com/project-codeflare/multi-cluster-app-dispatcher/pkg/client/informers/externalversions"
-	arbinformers "github.com/project-codeflare/multi-cluster-app-dispatcher/pkg/client/informers/externalversions/controller/v1beta1"
-
-	arblisters "github.com/project-codeflare/multi-cluster-app-dispatcher/pkg/client/listers/controller/v1beta1"
-
-	"github.com/project-codeflare/multi-cluster-app-dispatcher/pkg/controller/queuejobdispatch"
-
-	clusterstateapi "github.com/project-codeflare/multi-cluster-app-dispatcher/pkg/controller/clusterstate/api"
-	clusterstatecache "github.com/project-codeflare/multi-cluster-app-dispatcher/pkg/controller/clusterstate/cache"
-
 	names "k8s.io/apiserver/pkg/storage/names"
-
 )
 
 // defaultBackoffTime is the default backoff time in seconds
@@ -98,7 +75,8 @@ const defaultBackoffTime = 20
 type XController struct {
 	// MCAD configuration
 	config config.MCADConfiguration
-
+	serverOption *options.ServerOption
+	
 	appwrapperInformer arbinformers.AppWrapperInformer
 	// resources registered for the AppWrapper
 	// qjobRegisteredResources queuejobresources.RegisteredResources
@@ -251,9 +229,10 @@ func (qjm *XController) allocatableCapacity() *clusterstateapi.Resource {
 }
 
 // NewJobController create new AppWrapper Controller
-func NewJobController(restConfig *rest.Config, mcadConfig *config.MCADConfiguration, extConfig *config.MCADConfigurationExtended) *XController {
+func NewJobController(restConfig *rest.Config, serverOption *options.ServerOption, mcadConfig *config.MCADConfiguration, extConfig *config.MCADConfigurationExtended) *XController {
 	cc := &XController{
 		config:          *mcadConfig,
+		serverOption:    serverOption,
 		clients:         kubernetes.NewForConfigOrDie(restConfig),
 		arbclients:      clientset.NewForConfigOrDie(restConfig),
 		eventQueue:      cache.NewFIFO(GetQueueJobKey),
@@ -1592,7 +1571,7 @@ func (qjm *XController) UpdateQueueJobs(newjob *arbv1.AppWrapper) {
 		}
 		klog.V(6).Infof("[UpdateQueueJobs] %s/%s: qjqueue=%t &qj=%p Version=%s Status=%+v", newjob.Namespace, newjob.Name, qjm.qjqueue.IfExist(newjob), newjob, newjob.ResourceVersion, newjob.Status)
 		// set appwrapper status to Complete or RunningHoldCompletion
-		derivedAwStatus := qjm.getAppWrapperCompletionStatus(newjob)
+		derivedAwStatus, genericItemsCompletionStatus := qjm.getAppWrapperCompletionStatus(newjob)
 
 		klog.Infof("[UpdateQueueJobs]  Got completion status '%s' for app wrapper '%s/%s' Version=%s Status.CanRun=%t Status.State=%s, pod counts [Pending: %d, Running: %d, Succeded: %d, Failed %d]", derivedAwStatus, newjob.Namespace, newjob.Name, newjob.ResourceVersion,
 			newjob.Status.CanRun, newjob.Status.State, newjob.Status.Pending, newjob.Status.Running, newjob.Status.Succeeded, newjob.Status.Failed)
@@ -1602,6 +1581,7 @@ func (qjm *XController) UpdateQueueJobs(newjob *arbv1.AppWrapper) {
 		if derivedAwStatus == arbv1.AppWrapperStateRunningHoldCompletion {
 			newjob.Status.State = derivedAwStatus
 			var updateQj *arbv1.AppWrapper
+			newjob.Status.ItemCompletionStatus = genericItemsCompletionStatus
 			index := getIndexOfMatchedCondition(newjob, arbv1.AppWrapperCondRunningHoldCompletion, "SomeItemsCompleted")
 			if index < 0 {
 				newjob.Status.QueueJobState = arbv1.AppWrapperCondRunningHoldCompletion
@@ -2415,7 +2395,7 @@ func (cc *XController) manageQueueJob(ctx context.Context, qj *arbv1.AppWrapper,
 			}
 
 	
-			if _, err := cc.arbclients.McadV1beta1().AppWrappers(qj.Namespace).Update(ctx, qj, metav1.UpdateOptions{}); err != nil {
+			if _, err := cc.arbclients.WorkloadV1beta1().AppWrappers(qj.Namespace).Update(ctx, qj, metav1.UpdateOptions{}); err != nil {
 				klog.Errorf("Failed to update status of AppWrapper %v/%v: %v",
 					qj.Namespace, qj.Name, err)
 				return err
