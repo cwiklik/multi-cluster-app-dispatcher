@@ -2371,7 +2371,9 @@ func (cc *XController) manageQueueJob(ctx context.Context, qj *arbv1.AppWrapper,
 					if labels == nil {
 						labels = make(map[string]string)
 					}
-                    labels["target-cluster"] = qj.Spec.SchedSpec.ClusterScheduling.PolicyResult.TargetCluster.Name
+                    //labels["target-cluster"] = qj.Spec.SchedSpec.ClusterScheduling.PolicyResult.TargetCluster.Name
+					labels["app.kubernetes.io/part-of"] = "mcad"
+					labels["app.kubernetes.io/deploy-on"] = qj.Spec.SchedSpec.ClusterScheduling.PolicyResult.TargetCluster.Name
 					qj.Labels = labels
 					if err := cc.genNamesForGenericItemsIfNeeded(ctx, qj) ; err != nil {
 						klog.Errorf("[manageQueueJob] [Dispatcher] Error in [genNamesForGenericItemsIfNeeded], err=%#v",err)
