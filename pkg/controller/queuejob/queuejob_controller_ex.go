@@ -34,6 +34,7 @@ import (
 	"github.com/eapache/go-resiliency/retrier"
 	"github.com/hashicorp/go-multierror"
 
+	"github.com/project-codeflare/multi-cluster-app-dispatcher/cmd/kar-controllers/app/options"
 	arbv1 "github.com/project-codeflare/multi-cluster-app-dispatcher/pkg/apis/controller/v1beta1"
 	clientset "github.com/project-codeflare/multi-cluster-app-dispatcher/pkg/client/clientset/versioned"
 	informerFactory "github.com/project-codeflare/multi-cluster-app-dispatcher/pkg/client/informers/externalversions"
@@ -46,42 +47,21 @@ import (
 	"github.com/project-codeflare/multi-cluster-app-dispatcher/pkg/controller/queuejobresources/genericresource"
 	"github.com/project-codeflare/multi-cluster-app-dispatcher/pkg/controller/quota"
 	"github.com/project-codeflare/multi-cluster-app-dispatcher/pkg/controller/quota/quotaforestmanager"
+
 	qmutils "github.com/project-codeflare/multi-cluster-app-dispatcher/pkg/quotaplugins/util"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
-
-
-	v1 "k8s.io/api/core/v1"
-
-	"github.com/project-codeflare/multi-cluster-app-dispatcher/pkg/controller/queuejobresources"
-	"github.com/project-codeflare/multi-cluster-app-dispatcher/pkg/controller/queuejobresources/genericresource"
-	respod "github.com/project-codeflare/multi-cluster-app-dispatcher/pkg/controller/queuejobresources/pod"
-	"k8s.io/apimachinery/pkg/labels"
-
-	arbv1 "github.com/project-codeflare/multi-cluster-app-dispatcher/pkg/apis/controller/v1beta1"
-	clientset "github.com/project-codeflare/multi-cluster-app-dispatcher/pkg/client/clientset/versioned"
-
-	informerFactory "github.com/project-codeflare/multi-cluster-app-dispatcher/pkg/client/informers/externalversions"
-	arbinformers "github.com/project-codeflare/multi-cluster-app-dispatcher/pkg/client/informers/externalversions/controller/v1beta1"
-
-	arblisters "github.com/project-codeflare/multi-cluster-app-dispatcher/pkg/client/listers/controller/v1beta1"
-
-	"github.com/project-codeflare/multi-cluster-app-dispatcher/pkg/controller/queuejobdispatch"
-
-	clusterstateapi "github.com/project-codeflare/multi-cluster-app-dispatcher/pkg/controller/clusterstate/api"
-	clusterstatecache "github.com/project-codeflare/multi-cluster-app-dispatcher/pkg/controller/clusterstate/cache"
 
 	names "k8s.io/apiserver/pkg/storage/names"
 )
@@ -93,7 +73,7 @@ const defaultBackoffTime = 20
 type XController struct {
 	// MCAD configuration
 	config config.MCADConfiguration
-
+	serverOption *options.ServerOption
 	appwrapperInformer arbinformers.AppWrapperInformer
 	// resources registered for the AppWrapper
 	// qjobRegisteredResources queuejobresources.RegisteredResources
@@ -246,9 +226,10 @@ func (qjm *XController) allocatableCapacity() *clusterstateapi.Resource {
 }
 
 // NewJobController create new AppWrapper Controller
-func NewJobController(restConfig *rest.Config, mcadConfig *config.MCADConfiguration, extConfig *config.MCADConfigurationExtended) *XController {
+func NewJobController(restConfig *rest.Config, serverOption *options.ServerOption, mcadConfig *config.MCADConfiguration, extConfig *config.MCADConfigurationExtended) *XController {
 	cc := &XController{
 		config:          *mcadConfig,
+		serverOption:    serverOption,
 		clients:         kubernetes.NewForConfigOrDie(restConfig),
 		arbclients:      clientset.NewForConfigOrDie(restConfig),
 		eventQueue:      cache.NewFIFO(GetQueueJobKey),
@@ -1541,7 +1522,7 @@ func (qjm *XController) UpdateQueueJobs(newjob *arbv1.AppWrapper) {
 		}
 		klog.V(6).Infof("[UpdateQueueJobs] %s/%s: qjqueue=%t &qj=%p Version=%s Status=%+v", newjob.Namespace, newjob.Name, qjm.qjqueue.IfExist(newjob), newjob, newjob.ResourceVersion, newjob.Status)
 		// set appwrapper status to Complete or RunningHoldCompletion
-		derivedAwStatus := qjm.getAppWrapperCompletionStatus(newjob)
+		derivedAwStatus, genericItemsCompletionStatus := qjm.getAppWrapperCompletionStatus(newjob)
 
 		klog.Infof("[UpdateQueueJobs]  Got completion status '%s' for app wrapper '%s/%s' Version=%s Status.CanRun=%t Status.State=%s, pod counts [Pending: %d, Running: %d, Succeded: %d, Failed %d]", derivedAwStatus, newjob.Namespace, newjob.Name, newjob.ResourceVersion,
 			newjob.Status.CanRun, newjob.Status.State, newjob.Status.Pending, newjob.Status.Running, newjob.Status.Succeeded, newjob.Status.Failed)
@@ -1551,6 +1532,7 @@ func (qjm *XController) UpdateQueueJobs(newjob *arbv1.AppWrapper) {
 		if derivedAwStatus == arbv1.AppWrapperStateRunningHoldCompletion {
 			newjob.Status.State = derivedAwStatus
 			var updateQj *arbv1.AppWrapper
+			newjob.Status.ItemCompletionStatus = genericItemsCompletionStatus
 			index := getIndexOfMatchedCondition(newjob, arbv1.AppWrapperCondRunningHoldCompletion, "SomeItemsCompleted")
 			if index < 0 {
 				newjob.Status.QueueJobState = arbv1.AppWrapperCondRunningHoldCompletion
@@ -2349,30 +2331,28 @@ func (cc *XController) manageQueueJob(ctx context.Context, qj *arbv1.AppWrapper,
 					if labels == nil {
 						labels = make(map[string]string)
 					}
-                    labels["target-cluster"] = qj.Spec.SchedSpec.ClusterScheduling.PolicyResult.TargetCluster.Name
+					labels["app.kubernetes.io/part-of"] = "mcad"
+					labels["app.kubernetes.io/deploy-on"] = qj.Spec.SchedSpec.ClusterScheduling.PolicyResult.TargetCluster.Name
 					qj.Labels = labels
+					
 					if err := cc.genNamesForGenericItemsIfNeeded(ctx, qj) ; err != nil {
 						klog.Errorf("[manageQueueJob] [Dispatcher] Error in [genNamesForGenericItemsIfNeeded], err=%#v",err)
 						return err
 					}
+					
 				} else {
 					cc.agentMap[agentId].CreateJob(ctx, qj)
 				}
-				
-
-
 				qj.Status.IsDispatched = true
-				
 			} else {
 				klog.Errorf("[Dispatcher Controller] AppWrapper %s not found in dispatcher mapping.", qj.Name)
+			}
 			if klog.V(10).Enabled() {
 				current_time := time.Now()
 				klog.V(10).Infof("[manageQueueJob] [Dispatcher]  XQJ %s/%s has Overhead After Dispatching: %s", qj.Namespace, qj.Name, current_time.Sub(qj.CreationTimestamp.Time))
 				klog.V(10).Infof("[manageQueueJob] [Dispatcher]  %s/%s, %s: WorkerAfterDispatch", qj.Namespace, qj.Name, time.Now().Sub(qj.CreationTimestamp.Time))
 			}
-
-	
-			if _, err := cc.arbclients.McadV1beta1().AppWrappers(qj.Namespace).Update(ctx, qj, metav1.UpdateOptions{}); err != nil {
+			if _, err := cc.arbclients.WorkloadV1beta1().AppWrappers(qj.Namespace).Update(ctx, qj, metav1.UpdateOptions{}); err != nil {
 				klog.Errorf("Failed to update status of AppWrapper %v/%v: %v",
 					qj.Namespace, qj.Name, err)
 				return err
@@ -2382,9 +2362,11 @@ func (cc *XController) manageQueueJob(ctx context.Context, qj *arbv1.AppWrapper,
 	}
 	return nil
 }
+
 func (cc *XController) genNamesForGenericItemsIfNeeded(ctx context.Context, appwrapper *arbv1.AppWrapper) error {
 	var container = []arbv1.AppWrapperGenericResource{}
 	var replace = false
+
 	// NOTE: loop through each generic item and assign generated name if one is not provided
 	for _, genericItem := range appwrapper.Spec.AggrResources.GenericItems {
 			objectName := genericItem.GenericTemplate			
@@ -2397,6 +2379,7 @@ func (cc *XController) genNamesForGenericItemsIfNeeded(ctx context.Context, appw
 			}
 			unstruct.Object = blob.(map[string]interface{}) // set object to the content of the blob after Unmarshalling
 			name := ""
+			
 			if md, ok := unstruct.Object["metadata"]; ok {
 				metadata := md.(map[string]interface{})
 				if ns, ok := metadata["namespace"]; ok {
@@ -2421,13 +2404,14 @@ func (cc *XController) genNamesForGenericItemsIfNeeded(ctx context.Context, appw
 				}
 				container = append(container, genericItem)
 			}
-		}
 		// replace genericItems if at least one item was missing a name and the code above generated it 
 		if replace && len(container) > 0 {
 			appwrapper.Spec.AggrResources.GenericItems = container
 		}
+	}
 	return nil
 }
+
 // Cleanup function
 func (cc *XController) Cleanup(ctx context.Context, appwrapper *arbv1.AppWrapper) error {
 	klog.V(3).Infof("[Cleanup] begin AppWrapper '%s/%s' Version=%s", appwrapper.Namespace, appwrapper.Name, appwrapper.ResourceVersion)

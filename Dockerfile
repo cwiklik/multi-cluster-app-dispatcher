@@ -11,9 +11,8 @@ COPY pkg pkg
 COPY hack hack
 
 ENV GO_BUILD_ARGS=$GO_BUILD_ARGS
-RUN echo "Go build args: $GO_BUILD_ARGS" && \
-    make mcad-controller
-
+# RUN echo "Go build args: $GO_BUILD_ARGS" && make mcad-controller
+RUN make mcad-controller
 FROM registry.access.redhat.com/ubi8/ubi-minimal:latest
 
 COPY --from=BUILDER /workdir/_output/bin/mcad-controller /usr/local/bin

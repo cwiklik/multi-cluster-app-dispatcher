@@ -21,6 +21,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	"k8s.io/klog"
 )
 
 // ServerOption is the main context object for the controller manager.

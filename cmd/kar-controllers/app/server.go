@@ -18,9 +18,13 @@ package app
 
 import (
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
+	"k8s.io/klog"
 
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -61,9 +65,6 @@ func Run(opt *options.ServerOption) error {
 		Dispatcher:   pointer.Bool(opt.Dispatcher),
 		AgentConfigs: strings.Split(opt.AgentConfigs, ","),
 	}
-
-	jobctrl := queuejob.NewJobController(restConfig, mcadConfig, extConfig)
-
 	// dispatcher mode or agent mode
 	isDispatcher := opt.Dispatcher
 	if isDispatcher {
@@ -77,9 +78,8 @@ func Run(opt *options.ServerOption) error {
 		}
 		klog.V(4).Infof("expected agent cluster kubeconfig files found - proceeding to boostrap mcad dispatcher")
 	}
-
-	jobctrl := queuejob.NewJobController(config, opt)
-
+	jobctrl := queuejob.NewJobController(restConfig, opt, mcadConfig, extConfig)
+	
 	if jobctrl == nil {
 		return nil
 	}
