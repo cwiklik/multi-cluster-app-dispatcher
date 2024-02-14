@@ -936,7 +936,7 @@ func (qjm *XController) chooseAgent(ctx context.Context, qj *arbv1.AppWrapper) s
 		clusters := qj.Spec.SchedSpec.ClusterScheduling.Clusters
 		var agentId = ""
 		apath := path.Dir(qjm.agentList[0])
-		var agentIdList = make([]string, len(clusters))
+		var agentIdList[]string
 		clustersProvided := false // assume clusters not provided
 		for _, clusterRef := range clusters {
 			if clusterRef.Name != "" {
@@ -950,10 +950,10 @@ func (qjm *XController) chooseAgent(ctx context.Context, qj *arbv1.AppWrapper) s
 			agentId = qjm.agentList[rand.Int()%len(qjm.agentList)]
 			klog.V(1).Infof("ClusterId %s is chosen randomly from a list provided by mcad\n", agentId)
 		} else {
-			// choose target clusterId at random
-			agentId = agentIdList[rand.Int()%len(agentIdList)]
-			klog.V(1).Infof("ClusterId %s is chosen randomly from a list provided in Spec.SchedSpec.ClusterScheduling.Clusters: %s\n", agentId, agentIdList)
-		}
+            randomIndex := rand.Int()
+            // choose target clusterId at random
+            agentId = agentIdList[randomIndex%len(agentIdList)]
+            klog.V(1).Infof("ClusterId %s is chosen randomly from a list provided in Spec.SchedSpec.ClusterScheduling.Clusters: %s randomIndex: %d agentIdList.len = %d index = %d \n", agentId, agentIdList, randomIndex,len(agentIdList),randomIndex%len(agentIdList))		}
 		return agentId
 	}
 
